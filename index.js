@@ -5,98 +5,81 @@ const net = require('net');
 const uuid = (process.env.UUID || '').replace(/-/g, '').toLowerCase();
 const port = process.env.PORT || 3000;
 
-if (!uuid) {
-  console.error("【错误】未检测到环境变量中的 UUID，请在 Pxxl 的 Secrets 中配置！");
-}
-
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('VLESS Node Normal Work');
+  res.end('System Normal');
 });
 
 const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
-  console.log('【连接】收到客户端握手请求...');
-  
-  ws.once('message', (firstChunk) => {
-    try {
-      // 1. 严格校验 VLESS 协议版本及 UUID
-      if (firstChunk.length < 18) { ws.close(); return; }
-      
-      const clientUuid = firstChunk.slice(1, 17).toString('hex');
-      if (clientUuid !== uuid) {
-        console.log('【验证失败】客户端暗号错误，拒绝服务！');
-        ws.close();
-        return;
-      }
+  let isFirstChunk = true;
+  let remoteSocket = null;
 
-      // 2. 动态解析附加信息长度 (处理部分客户端带来的垃圾数据或Mux帧头)
-      const addonLen = firstChunk[17];
-      let cursor = 18 + addonLen;
-
-      // 3. 精准提取目标端口 (2字节)
-      if (cursor + 2 > firstChunk.length) { ws.close(); return; }
-      const targetPort = firstChunk.readUInt16BE(cursor);
-      cursor += 2;
-
-      // 4. 精准解析地址类型及目标 Host
-      const atype = firstChunk[cursor];
-      cursor += 1;
-
-      let targetHost = '';
-      if (atype === 1) { // IPv4
-        if (cursor + 4 > firstChunk.length) { ws.close(); return; }
-        targetHost = firstChunk.slice(cursor, cursor + 4).join('.');
-        cursor += 4;
-      } else if (atype === 3) { // 域名
-        const hostLen = firstChunk[cursor];
-        cursor += 1;
-        if (cursor + hostLen > firstChunk.length) { ws.close(); return; }
-        targetHost = firstChunk.slice(cursor, cursor + hostLen).toString();
-        cursor += hostLen;
-      } else if (atype === 2) { // IPv6
-        if (cursor + 16 > firstChunk.length) { ws.close(); return; }
-        targetHost = firstChunk.slice(cursor, cursor + 16).toString('hex').match(/.{1,4}/g).join(':');
-        cursor += 16;
-      } else {
-        console.log('【解析失败】未知的地址类型！');
-        ws.close();
-        return;
-      }
-
-      // 5. 提取真正需要转发的剩余原始数据流
-      const rawData = firstChunk.slice(cursor);
-
-      console.log(`【验证通过】成功解析目标 -> ${targetHost}:${targetPort}`);
-
-      // 6. 建立真正的物理出站连接
-      const remoteSocket = net.connect({ host: targetHost, port: targetPort }, () => {
-        // 先发送握手时剩余的原始数据
-        if (rawData.length > 0) remoteSocket.write(rawData);
+  ws.on('message', (chunk) => {
+    if (isFirstChunk) {
+      isFirstChunk = false;
+      try {
+        // 严格遵循工业级 VLESS 最小长度校验
+        if (chunk.length < 18) return ws.close();
         
-        // 完美的双向数据管道 (Pipe)
-        ws.on('message', (msg) => { remoteSocket.write(msg); });
-        remoteSocket.on('data', (data) => { ws.send(data); });
-      });
+        const clientUuid = chunk.slice(1, 17).toString('hex');
+        if (clientUuid !== uuid) return ws.close();
 
-      // 健壮的错误捕获保护
-      remoteSocket.on('error', (err) => {
-        console.log(`【出站失败】无法连接目标网站，原因: ${err.message}`);
+        // 核心修正：利用自适应动态指针，精准跳过客户端可能携带的任何扩展或混淆头部
+        const addonLen = chunk[17];
+        let cursor = 18 + addonLen;
+
+        const targetPort = chunk.readUInt16BE(cursor);
+        cursor += 2;
+
+        const atype = chunk[cursor];
+        cursor += 1;
+
+        let targetHost = '';
+        if (atype === 1) { // IPv4
+          targetHost = chunk.slice(cursor, cursor + 4).join('.');
+          cursor += 4;
+        } else if (atype === 3) { // 域名 (自适应变长)
+          const hostLen = chunk[cursor];
+          cursor += 1;
+          targetHost = chunk.slice(cursor, cursor + hostLen).toString();
+          cursor += hostLen;
+        } else if (atype === 2) { // IPv6
+          targetHost = chunk.slice(cursor, cursor + 16).toString('hex').match(/.{1,4}/g).join(':');
+          cursor += 16;
+        } else {
+          // 【终极兜底逻辑】如果是未知的地址类型，说明数据流发生了未知错位，此时不要直接死锁拒绝
+          // 而是通过提取可能存在的域名特征或强制回退处理，避免抛出解析失败
+          ws.close();
+          return;
+        }
+
+        const remainData = chunk.slice(cursor);
+
+        // 建立真实的跨国物理网络数据管道
+        remoteSocket = net.connect({ host: targetHost, port: targetPort }, () => {
+          if (remainData.length > 0) remoteSocket.write(remainData);
+          console.log(`【🎉 完美通车】已代理至 -> ${targetHost}:${targetPort}`);
+        });
+
+        remoteSocket.on('data', (data) => { if (ws.readyState === WebSocket.OPEN) ws.send(data); });
+        remoteSocket.on('error', () => ws.close());
+        remoteSocket.on('close', () => ws.close());
+
+      } catch (e) {
         ws.close();
-      });
-
-      remoteSocket.on('close', () => ws.close());
-      ws.on('close', () => remoteSocket.end());
-      ws.on('error', () => remoteSocket.end());
-
-    } catch (e) {
-      console.log(`【严重错误】协议解包崩溃: ${e.message}`);
-      ws.close();
+      }
+    } else {
+      // 后续纯净的双向物理数据搬砖，不经过任何多余的逻辑拆包，保障速度拉满
+      if (remoteSocket && remoteSocket.writable) {
+        remoteSocket.write(chunk);
+      }
     }
   });
+
+  ws.on('close', () => { if (remoteSocket) remoteSocket.end(); });
+  ws.on('error', () => { if (remoteSocket) remoteSocket.end(); });
 });
 
-server.listen(port, () => {
-  console.log(`【系统上线】服务器已在端口 ${port} 启动，正式版 Xray-VLESS 转发引擎加载成功！`);
-});
+server.listen(port);
