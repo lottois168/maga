@@ -9,13 +9,39 @@ const port = parseInt(process.env.PORT || '8080', 10);
 
 if (!uuid) { console.error('UUID required'); process.exit(1); }
 
+const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <title>系统维护中 / System Maintenance</title>
+  <style>
+    body { font-family: sans-serif; background: #f4f7f6; color: #555; text-align: center; padding: 150px 20px; margin: 0; }
+    .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    h1 { color: #ff5e5b; font-size: 24px; }
+    p { font-size: 16px; line-height: 1.6; }
+    .loader { height: 4px; width: 100%; background: #eee; border-radius: 2px; margin: 20px 0; overflow: hidden; position: relative; }
+    .loader::after { content: ''; display: block; width: 40%; height: 100%; background: #ff5e5b; position: absolute; animation: move 2s infinite linear; }
+    @keyframes move { 0% { left: -40%; } 100% { left: 100%; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⚙️ 核心系统底层升级维护中</h1>
+    <p>为了提供更优质、更稳定的网络环境，我们的后端 Workspace 正在进行例行架构迁移与优化。预计完成时间需要数小时，请稍后再试。</p>
+    <div class="loader"></div>
+    <p style="font-size: 12px; color: #aaa;">Service status: Under Maintenance (Xray Native Edge)</p>
+  </div>
+</body>
+</html>`;
+
+const fakeHtmlPath = path.join('/tmp', 'index.html');
+fs.writeFileSync(fakeHtmlPath, htmlContent);
+// ======================================================================
+
 const bin = path.join(__dirname, 'web-worker');
 if (!fs.existsSync(bin)) {
   try { execSync('node setup.js', { stdio: 'inherit', cwd: __dirname }); }
   catch (e) { process.exit(1); }
 }
-
-const htmlPage = `<!DOCTYPE html><html><head><title>系统维护中 / System Maintenance</title><style>body { font-family: sans-serif; background: #f4f7f6; color: #555; text-align: center; padding: 150px 20px; margin: 0; }.container { max-width: 600px; margin: 0 auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }h1 { color: #ff5e5b; font-size: 24px; }p { font-size: 16px; line-height: 1.6; }.loader { height: 4px; width: 100%; background: #eee; border-radius: 2px; margin: 20px 0; overflow: hidden; position: relative; }.loader::after { content: ''; display: block; width: 40%; height: 100%; background: #ff5e5b; position: absolute; animation: move 2s infinite linear; }@keyframes move { 0% { left: -40%; } 100% { left: 100%; } }</style></head><body><div class="container"><h1>⚙️ 核心系统底层升级维护中</h1><p>为了提供更优质、更稳定的网络环境，我们的后端 Workspace 正在进行例行架构迁移与优化。预计完成时间需要数小时，请稍后再试。</p><div class="loader"></div><p style="font-size: 12px; color: #aaa;">Service status: Under Maintenance (Xray Inbound Edge)</p></div></body></html>`;
 
 const cfg = {
   log: { loglevel: 'warning' },
@@ -27,7 +53,7 @@ const cfg = {
       decryption: 'none',
       fallbacks: [
         {
-          dest: "data:text/html;base64," + Buffer.from(htmlPage).toString('base64'), 
+          dest: fakeHtmlPath, 
           xver: 0
         }
       ]
