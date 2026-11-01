@@ -12,23 +12,18 @@ if (!uuid) {
 
 const server = createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Server Alive');
+    res.end('System Normal');
 });
 
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws) => {
-    console.log('⚡ [PROXY] New incoming WebSocket connection established.');
-    
     ws.once('message', (firstChunk) => {
         try {
             if (firstChunk.length < 18) return ws.close();
 
             const clientUuid = firstChunk.slice(1, 17).toString('hex');
-            if (clientUuid !== uuid) {
-                console.log('❌ [AUTH FAILED] Invalid UUID Secret.');
-                return ws.close();
-            }
+            if (clientUuid !== uuid) return ws.close();
 
             let addonLen = firstChunk[17];
             let cursor = 18 + addonLen;
@@ -70,12 +65,9 @@ wss.on('connection', (ws) => {
             ws.on('error', () => remoteSocket.end());
 
         } catch (err) {
-            console.error('🔥 [CRASH] Protocol stream parse error:', err.message);
             ws.close();
         }
     });
 });
 
-server.listen(port, () => {
-    console.log(`🚀 [SYSTEM READY] VLESS-WS core successfully running on port ${port}`);
-});
+server.listen(port);
