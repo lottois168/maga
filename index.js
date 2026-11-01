@@ -59,7 +59,10 @@ wss.on('connection', (ws) => {
     });
 
     // 错误处理与断开连接保护
-    remoteSocket.on('error', () => ws.close());
+    remoteSocket.on('error', (err) => {
+    console.log(`❌ 连接目标网站失败！平台拒绝了请求，错误原因: ${err.message}`);
+    ws.close();
+    });
     remoteSocket.on('close', () => ws.close());
     ws.on('close', () => remoteSocket.end());
     ws.on('error', () => remoteSocket.end());
