@@ -1,12 +1,12 @@
 {
-  "name": "pxxl-free-node",
+  "name": "pxxl-free",
   "version": "1.0.0",
-  "description": "Pxxl Free Node",
+  "description": "Pxxl Free VLESS Node",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "ws": "^8.13.0"
+    "ws": "^8.16.0"
   }
 }
