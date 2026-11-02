@@ -1,17 +1,17 @@
 const http = require('http');
-const { WebSocketServer } = require('ws');
 const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { spawn, execSync } = require('child_process'); 
+const { spawn, execSync } = require('child_process');
+const HttpProxy = require('http-proxy'); 
 
 const uuid = process.env.UUID || process.env.APP_KEY;
 const wsPath = process.env.WSPATH || process.env.API_ROUTE || '/api/v1/sync';
 const port = parseInt(process.env.PORT || '3000', 10); 
 
 if (!uuid) {
-    console.error('❌ [ERROR] UUID is totally required! Please set it in Pxxl Secrets.');
+    console.error('❌ [ERROR] UUID requirement failed!');
     process.exit(1);
 }
 
@@ -19,32 +19,43 @@ const xrayInternalPort = 10086;
 
 const bin = path.join(__dirname, 'web-worker');
 if (!fs.existsSync(bin)) {
-  try { 
-    console.log("⏳ [INIT] Downloading latest Xray Core components...");
-    execSync('node setup.js', { stdio: 'inherit', cwd: __dirname }); 
-  } catch (e) { 
-    console.error("❌ [INIT FAILED] Cannot download Xray Core!");
-    process.exit(1); 
-  }
+  try { execSync('node setup.js', { stdio: 'inherit', cwd: __dirname }); }
+  catch (e) { process.exit(1); }
 }
 
 const cfg = {
   log: { loglevel: 'warning' },
   inbounds: [{
-    listen: '127.0.0.1', 
-    port: xrayInternalPort,
+    listen: '127.0.0.1', port: xrayInternalPort,
     protocol: 'vless',
     settings: { clients: [{ id: uuid }], decryption: 'none' },
-    streamSettings: { network: 'ws', wsSettings: { path: wsPath } }
+    streamSettings: { network: 'ws', wsSettings: { path: wsPath } },
+    sniffing: { enabled: true, destOverride: ['http', 'tls', 'quic'] }
   }],
-  outbounds: [{ protocol: 'freedom', tag: 'direct', settings: { domainStrategy: 'UseIPv4' } }]
+  outbounds: [
+    { protocol: 'freedom', tag: 'direct', settings: { domainStrategy: 'UseIPv4' } },
+    { protocol: 'blackhole', tag: 'block' }
+  ],
+  routing: {
+    domainStrategy: 'IPIfNonMatch',
+    rules: [
+      { type: 'field', outboundTag: 'block', protocol: ['bittorrent'] },
+      { type: 'field', outboundTag: 'block', ip: ['geoip:private'] },
+      { type: 'field', outboundTag: 'block', domain: ['geosite:private'] }
+    ]
+  },
+  dns: { servers: ['https://1.1.1', 'https://8.8.8'], queryStrategy: 'UseIPv4' }
 };
 
 const cfgPath = path.join('/tmp', 'runtime-' + crypto.randomBytes(4).toString('hex') + '.json');
 fs.writeFileSync(cfgPath, JSON.stringify(cfg));
-
 const child = spawn(bin, ['run', '-c', cfgPath], { stdio: 'inherit', cwd: __dirname });
 
+
+const proxy = HttpProxy.createProxyServer({
+  target: `http://127.0.0.1:${xrayInternalPort}`,
+  ws: true 
+});
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -76,18 +87,9 @@ const server = http.createServer((req, res) => {
 });
 
 
-const wss = new WebSocketServer({ noServer: true });
-
-server.on('upgrade', (request, socket, head) => {
-  if (request.url === wsPath) {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      const xraySocket = net.connect({ port: xrayInternalPort, host: '127.0.0.1' }, () => {
-        ws.on('message', (msg) => { if (xraySocket.writable) xraySocket.write(msg); });
-        xraySocket.on('data', (data) => { if (ws.readyState === 1) ws.send(data); });
-      });
-      xraySocket.on('error', () => ws.close());
-      ws.on('close', () => xraySocket.end());
-    });
+server.on('upgrade', (req, socket, head) => {
+  if (req.url === wsPath) {
+    proxy.ws(req, socket, head);
   } else {
     socket.destroy();
   }
@@ -95,6 +97,11 @@ server.on('upgrade', (request, socket, head) => {
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`🚀 [SYSTEM READY] Original Xray Core with Maintenance WebPage fully operational on port ${port}!`);
+});
+
+proxy.on('error', (err) => {
+  if (err.message.includes('ECONNRESET') || err.message.includes('EPIPE')) return;
+  console.log(`[PROXY ERROR] ${err.message}`);
 });
 
 child.on('exit', (c) => process.exit(c || 0));
