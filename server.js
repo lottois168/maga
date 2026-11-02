@@ -44,7 +44,7 @@ const cfg = {
       { type: 'field', outboundTag: 'block', domain: ['geosite:private'] }
     ]
   },
-  dns: { servers: ['https://1.1.1', 'https://8.8.8'], queryStrategy: 'UseIPv4' }
+  dns: { servers: ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query'], queryStrategy: 'UseIPv4' }
 };
 
 const cfgPath = path.join('/tmp', 'runtime-' + crypto.randomBytes(4).toString('hex') + '.json');
