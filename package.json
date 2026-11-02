@@ -9,7 +9,6 @@
   },
   "engines": { "node": ">=18" },
   "dependencies": {
-    "ws": "^8.16.0",
     "http-proxy": "^1.18.1"
   }
 }
