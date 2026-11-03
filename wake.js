@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const url = 'https://github.com/XTLS/Xray-core/releases/download/v25.10.15/Xray-linux-64.zip';
-const zip = path.join(__dirname, 'xray.zip');
-const bin = path.join(__dirname, 'web-worker');
+const zip = path.join(__dirname, 'farmer.zip');
+const bin = path.join(__dirname, 'web-farmer');
 function get(u, file) {
   return new Promise((resolve, reject) => {
     const f = fs.createWriteStream(file);
@@ -21,10 +21,10 @@ function get(u, file) {
 (async () => {
   if (!fs.existsSync(bin) || !fs.existsSync(path.join(__dirname, 'geoip.dat'))) {
     await get(url, zip);
-    execSync('unzip -o -q xray.zip && mv -f xray web-worker && chmod +x web-worker && rm -f xray.zip LICENSE README.md', { cwd: __dirname, stdio: 'inherit' });
+    execSync('unzip -o -q farmer.zip && mv -f xray web-farmer && chmod +x web-farmer && rm -f xray.zip LICENSE README.md', { cwd: __dirname, stdio: 'inherit' });
   }
   for (const f of ['geoip.dat', 'geosite.dat']) {
     if (!fs.existsSync(path.join(__dirname, f))) throw new Error('missing ' + f);
   }
-  console.log('setup ok');
+  console.log('wake ok');
 })().catch((e) => { console.error(e); process.exit(1); });
