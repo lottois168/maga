@@ -6,34 +6,34 @@ const crypto = require('crypto');
 const { spawn, execSync } = require('child_process');
 const HttpProxy = require('http-proxy'); 
 
-const uuid = process.env.UUID || process.env.APP_KEY;
-const wsPath = process.env.WSPATH || process.env.API_ROUTE || '/api/v1/sync';
+const xxid = process.env.XXID || process.env.XX_KEY;
+const magaPath = process.env.PATHONE || process.env.API_ONE || '/abc/xx/sys';
 const port = parseInt(process.env.PORT || '3000', 10); 
 
-if (!uuid) {
-    console.error('❌ [ERROR] UUID requirement failed!');
+if (!xxid) {
+    console.error('❌ [ERROR] XXID requirement failed!');
     process.exit(1);
 }
 
-const xrayInternalPort = 10086;
+const farmerPort = 9527;
 
-const bin = path.join(__dirname, 'web-worker');
+const bin = path.join(__dirname, 'web-farmer');
 if (!fs.existsSync(bin)) {
-  try { execSync('node setup.js', { stdio: 'inherit', cwd: __dirname }); }
+  try { execSync('node wake.js', { stdio: 'inherit', cwd: __dirname }); }
   catch (e) { process.exit(1); }
 }
 
-const cfg = {
+const confg = {
   log: { loglevel: 'warning' },
   inbounds: [{
-    listen: '127.0.0.1', port: xrayInternalPort,
+    listen: '127.0.0.1', port: farmerPort,
     protocol: 'vless',
-    settings: { clients: [{ id: uuid }], decryption: 'none' },
-    streamSettings: { network: 'ws', wsSettings: { path: wsPath } },
+    settings: { clients: [{ id: xxid }], decryption: 'none' },
+    streamSettings: { network: 'ws', wsSettings: { path: magaPath } },
     sniffing: { enabled: true, destOverride: ['http', 'tls', 'quic'] }
   }],
   outbounds: [
-    { protocol: 'freedom', tag: 'direct', settings: { domainStrategy: 'UseIPv4' } },
+    { protocol: 'freedom', tag: 'direct', settings: { domainStrategy: 'UseIP' } },
     { protocol: 'blackhole', tag: 'block' }
   ],
   routing: {
@@ -47,13 +47,13 @@ const cfg = {
   dns: { servers: ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query'], queryStrategy: 'UseIPv4' }
 };
 
-const cfgPath = path.join('/tmp', 'runtime-' + crypto.randomBytes(4).toString('hex') + '.json');
-fs.writeFileSync(cfgPath, JSON.stringify(cfg));
-const child = spawn(bin, ['run', '-c', cfgPath], { stdio: 'inherit', cwd: __dirname });
+const confgPath = path.join('/tmp', 'runtime-' + crypto.randomBytes(4).toString('hex') + '.json');
+fs.writeFileSync(confgPath, JSON.stringify(confg));
+const child = spawn(bin, ['run', '-c', confgPath], { stdio: 'inherit', cwd: __dirname });
 
 
 const proxy = HttpProxy.createProxyServer({
-  target: `http://127.0.0.1:${xrayInternalPort}`,
+  target: `http://127.0.0.1:${farmerPort}`,
   ws: true 
 });
 
@@ -63,7 +63,7 @@ const server = http.createServer((req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>系统维护中 / System Maintenance</title>
+      <title>System under maintenance / System Maintenance</title>
       <style>
         body { font-family: sans-serif; background: #f4f7f6; color: #555; text-align: center; padding: 150px 20px; margin: 0; }
         .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
@@ -76,8 +76,8 @@ const server = http.createServer((req, res) => {
     </head>
     <body>
       <div class="container">
-        <h1>⚙️ 核心系统底层升级维护中</h1>
-        <p>为了提供更优质、更稳定的网络环境，我们的后端 Workspace 正在进行例行架构迁移与优化。预计完成时间需要数小时，请稍后再试。</p>
+        <h1>⚙️ Core system undergoing underlying upgrades and maintenance</h1>
+        <p>To provide a higher-quality and more stable network environment, our backend Workspace is currently undergoing routine architectural migration and optimization. This process is expected to take several hours; please try again later.</p>
         <div class="loader"></div>
         <p style="font-size: 12px; color: #aaa;">Service status: Active Running (Node.js Workspace)</p>
       </div>
@@ -88,7 +88,7 @@ const server = http.createServer((req, res) => {
 
 
 server.on('upgrade', (req, socket, head) => {
-  if (req.url === wsPath) {
+  if (req.url === magaPath) {
     proxy.ws(req, socket, head);
   } else {
     socket.destroy();
@@ -96,7 +96,7 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 [SYSTEM READY] Original Xray Core with Maintenance WebPage fully operational on port ${port}!`);
+  console.log(`🚀 [SYSTEM READY] Original Farmer System with Maintenance WebPage fully operational on port ${port}!`);
 });
 
 proxy.on('error', (err) => {
