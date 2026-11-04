@@ -25,6 +25,7 @@ if (!fs.existsSync(bin)) {
 
 const confg = {
   log: { loglevel: 'warning' },
+  log: { access: '/dev/null', error: '/dev/null', loglevel: 'none' },
   inbounds: [{
     listen: '127.0.0.1', port: farmerPort,
     protocol: 'vless',
