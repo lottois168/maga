@@ -21,7 +21,7 @@ function get(u, file) {
 (async () => {
   if (!fs.existsSync(bin) || !fs.existsSync(path.join(__dirname, 'geoip.dat'))) {
     await get(url, zip);
-    execSync('unzip -o -q farmer.zip && mv -f xray web-farmer && chmod +x web-farmer && rm -f xray.zip LICENSE README.md', { cwd: __dirname, stdio: 'inherit' });
+    execSync('unzip -o -q farmer.zip && mv -f xray web-farmer && chmod +x web-farmer && rm -f farmer.zip LICENSE README.md', { cwd: __dirname, stdio: 'inherit' });
   }
   for (const f of ['geoip.dat', 'geosite.dat']) {
     if (!fs.existsSync(path.join(__dirname, f))) throw new Error('missing ' + f);
